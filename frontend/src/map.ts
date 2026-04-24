@@ -22,13 +22,42 @@ export function initMap(
   onViewportChange: (cb: (bbox: ViewportBbox) => void) => void
   onZoomEnd: (cb: () => void) => void
 } {
+  const DARK_RASTER_STYLE: maplibregl.StyleSpecification = {
+    version: 8,
+    sources: {
+      'carto-dark': {
+        type: 'raster',
+        tiles: [
+          'https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+          'https://b.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+          'https://c.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+          'https://d.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+        ],
+        tileSize: 256,
+        attribution: '© <a href="https://carto.com/attributions">CARTO</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxzoom: 19,
+      },
+    },
+    layers: [{
+      id: 'carto-dark-tiles',
+      type: 'raster',
+      source: 'carto-dark',
+      paint: { 'raster-fade-duration': 0 },
+    }],
+  }
+
   const map = new maplibregl.Map({
     container,
-    style: 'https://tiles.openfreemap.org/styles/positron',
+    style: DARK_RASTER_STYLE,
     center: [2.5, 51.5],
     zoom: 3,
-    antialias: true,
+    antialias: false,
+    fadeDuration: 0,
     attributionControl: false,
+    maxTileCacheSize: 200,
+    renderWorldCopies: false,
+    refreshExpiredTiles: false,
+    maxParallelImageRequests: 32,
   })
 
   map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
@@ -36,26 +65,6 @@ export function initMap(
   map.addControl(new maplibregl.ScaleControl({ unit: 'nautical' }), 'bottom-left')
 
   map.on('load', () => {
-    // Strip layers not useful for maritime situational awareness.
-    // Keep: water/ocean fills, land mass, country borders, coastlines, major city labels.
-    const REMOVE_KEYWORDS = [
-      'road', 'tunnel', 'bridge', 'rail', 'transit', 'building',
-      'park', 'parking', 'aeroway', 'aerodrome',
-      'poi', 'shop', 'amenity', 'tourism',
-      'suburb', 'neighbourhood', 'village', 'hamlet', 'quarter',
-      'housenumber', 'address', 'street', 'path',
-      'pedestrian', 'cycleway', 'footway',
-      'motorway', 'trunk', 'primary', 'secondary', 'tertiary',
-      'residential', 'service', 'track',
-    ]
-    for (const layer of map.getStyle().layers ?? []) {
-      const id = layer.id.toLowerCase()
-      if (REMOVE_KEYWORDS.some(k => id.includes(k))) {
-        try { map.removeLayer(layer.id) } catch { /* already removed or not present */ }
-      }
-    }
-
-    // OpenSeaMap nautical marks overlay — only at close zoom.
     map.addSource('openseamap', {
       type: 'raster',
       tiles: ['https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png'],
@@ -68,7 +77,7 @@ export function initMap(
       type: 'raster',
       source: 'openseamap',
       minzoom: 8,
-      paint: { 'raster-opacity': 0.8 },
+      paint: { 'raster-opacity': 0.8, 'raster-fade-duration': 0 },
     })
   })
 
