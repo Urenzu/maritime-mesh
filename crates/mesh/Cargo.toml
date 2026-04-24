@@ -1,0 +1,12 @@
+[package]
+name = "mesh"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+schema    = { workspace = true }
+zenoh     = { workspace = true }
+tokio     = { workspace = true }
+serde_json = { workspace = true }
+tracing   = { workspace = true }
+anyhow    = { workspace = true }

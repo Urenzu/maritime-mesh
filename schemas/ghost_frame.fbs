@@ -1,0 +1,76 @@
+// Canonical wire format for all telemetry in the system.
+// Every real AIS observation and every synthetic dead-reckoned frame
+// is encoded as a GhostFrame before touching the WAL.
+//
+// Generate Rust: flatc --rust -o crates/schema/src/ schemas/ghost_frame.fbs
+
+namespace maritime;
+
+enum FrameType : byte {
+    Real      = 0,  // direct from AIS/NMEA/Radar
+    Synthetic = 1,  // dead-reckoned / interpolated
+    GapMarker = 2,  // sentinel: dark event boundary
+}
+
+enum SynthModel : byte {
+    None                       = 0,
+    KalmanConstantVelocity     = 1,
+    KalmanConstantAcceleration = 2,
+    GreatCircle                = 3,
+}
+
+table GapData {
+    gap_start_ns:      int64;
+    gap_end_ns:        int64 = 0;   // 0 = ongoing
+    last_lat:          double;
+    last_lon:          double;
+    last_sog:          float;
+    last_cog:          float;
+    coverage_area_id:  uint32;
+    dark_event_id:     uint64;
+}
+
+table GhostFrame {
+    // Identity
+    frame_id:       uint64;
+    mmsi:           uint32;
+    vessel_name:    string;
+    vessel_type:    uint8;
+
+    // Position (WGS84)
+    lat:            double;
+    lon:            double;
+    altitude:       float = 0.0;
+    position_acc:   bool  = false;  // true = high / RAIM
+
+    // Kinematics
+    sog:            float;          // speed over ground, knots
+    cog:            float;          // course over ground, degrees true
+    heading:        float;          // true heading, degrees
+    rot:            float;          // rate of turn, deg/min
+
+    // Temporal
+    timestamp_utc_ns:  int64;       // source timestamp, Unix nanoseconds
+    ingested_at_ns:    int64;       // wall clock at WAL write, Unix nanoseconds
+
+    // Classification
+    frame_type:     FrameType = Real;
+    confidence:     float = 1.0;    // 1.0 for Real; decays over time for Synthetic
+    synth_model:    SynthModel = None;
+
+    // Source
+    source_node_id: uint64;
+    raw_sentence:   [ubyte];        // original NMEA sentence bytes (Real only)
+
+    // Integrity — per-vessel hash chain
+    prev_hash:      [ubyte];        // SHA-256 of previous frame (32 bytes)
+    signature:      [ubyte];        // Ed25519 over all fields above (64 bytes)
+
+    // Gap annotation (set only when frame_type == GapMarker)
+    gap_data:       GapData;
+}
+
+root_type GhostFrame;
+
+file_identifier "GHST";
+file_extension  "ghst";

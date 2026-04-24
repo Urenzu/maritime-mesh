@@ -1,0 +1,53 @@
+services:
+
+  sim:
+    build:
+      context: .
+      dockerfile: docker/sim.Dockerfile
+    environment:
+      SIM_ADDR: "0.0.0.0:10110"
+    ports:
+      - "10110:10110"
+    profiles: ["sim"]   # only starts with: docker compose --profile sim up
+
+  ingest:
+    build:
+      context: .
+      dockerfile: docker/ingest.Dockerfile
+    env_file: .env
+    environment:
+      GHOST_LOG_PATH: /data/ghost-log
+      # When using sim instead of real AIS feed:
+      # AISSTREAM_MODE: sim
+      # SIM_HOST: sim
+    volumes:
+      - ghost-log-data:/data/ghost-log
+    depends_on: []
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    env_file: .env
+    environment:
+      GHOST_LOG_PATH: /data/ghost-log
+      BIND_ADDR: "0.0.0.0:8080"
+      DARK_ZONE_THRESHOLD_MINS: "15"
+    volumes:
+      - ghost-log-data:/data/ghost-log
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend.Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  ghost-log-data:

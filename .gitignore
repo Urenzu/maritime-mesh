@@ -1,0 +1,26 @@
+# Rust
+/target
+Cargo.lock
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data
+/data
+
+# Frontend
+node_modules
+/frontend/dist
+/frontend/.vite
+
+# Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

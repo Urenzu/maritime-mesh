@@ -1,0 +1,12 @@
+[package]
+name = "dark-zone"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+schema    = { workspace = true }
+tokio     = { workspace = true }
+tracing   = { workspace = true }
+anyhow    = { workspace = true }
+serde     = { workspace = true }
+serde_json = { workspace = true }
