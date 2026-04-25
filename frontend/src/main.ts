@@ -26,7 +26,7 @@ let colors      = new Uint8Array(0)
 let mmsis       = new Int32Array(0)
 let vesselCount = 0
 let darkCount   = 0
-let darkEvents: DarkEvent[] = []
+let ongoingDarkEvents: DarkEvent[] = []  // pre-filtered on arrival, passed to buildLayers
 
 let dataDirty = false
 let hudDirty  = false
@@ -44,8 +44,9 @@ function renderLoop() {
   if (dataDirty) {
     dataDirty  = false
     hudDirty   = false
-    currentLod = getLod(getZoom())
-    overlay.setProps({ layers: buildLayers(vesselCount, positions, colors, mmsis, darkEvents, getZoom(), onVesselClick) })
+    const zoom = getZoom()
+    currentLod = getLod(zoom)
+    overlay.setProps({ layers: buildLayers(vesselCount, positions, colors, mmsis, ongoingDarkEvents, zoom, onVesselClick) })
     updateHud(vesselCount, darkCount)
   } else if (hudDirty) {
     hudDirty = false
@@ -85,8 +86,8 @@ fetchVessels().then(list => {
 async function refreshDarkZones() {
   try {
     const { dark_events } = await fetchDarkZones()
-    darkEvents = dark_events
-    dataDirty  = true
+    ongoingDarkEvents = dark_events.filter(e => e.is_ongoing)
+    dataDirty         = true
   } catch { /* keep last state */ }
 }
 

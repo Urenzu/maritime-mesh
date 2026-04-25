@@ -13,8 +13,10 @@ const COLOR_SYNTHETIC: readonly [number, number, number, number] = [255, 180, 0,
 const COLOR_DARK:      readonly [number, number, number, number] = [255, 60,  60,  255]
 
 const vessels = new Map<number, VesselState>()
-let ws: WebSocket | null = null
-let wsUrl = ''
+let ws:      WebSocket | null = null
+let wsUrl    = ''
+let dirty    = false   // true when any vessel changed since last snapshot
+let retryMs  = 3_000   // exponential backoff, capped at 30s
 
 function connect() {
   ws = new WebSocket(wsUrl)
@@ -35,10 +37,15 @@ function connect() {
         is_dark:      frame.frame_type.type === FrameType.GapMarker,
         confidence:   frame.confidence,
       })
+      dirty = true
     } catch { /* ignore malformed frame */ }
   }
 
-  ws.onclose = () => setTimeout(connect, 3_000)
+  ws.onopen  = () => { retryMs = 3_000 }
+  ws.onclose = () => {
+    retryMs = Math.min(retryMs * 2, 30_000)
+    setTimeout(connect, retryMs)
+  }
 }
 
 function sendViewport(bbox: ViewportBbox) {
@@ -48,8 +55,9 @@ function sendViewport(bbox: ViewportBbox) {
 }
 
 function postSnapshot() {
+  if (!dirty || vessels.size === 0) return
+  dirty = false
   const count = vessels.size
-  if (count === 0) return
 
   const positions = new Float32Array(count * 2)
   const colors    = new Uint8Array(count * 4)

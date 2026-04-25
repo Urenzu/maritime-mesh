@@ -117,6 +117,7 @@ export function initMap(container: HTMLElement): {
     const b = map.getBounds()
     vpCallback({ min_lat: b.getSouth(), min_lon: b.getWest(), max_lat: b.getNorth(), max_lon: b.getEast() })
   }
+  map.on('load',    emitViewport)
   map.on('moveend', emitViewport)
   map.on('zoomend', emitViewport)
 
@@ -146,7 +147,7 @@ export function buildLayers(
   if (zoom >= ZOOM_GRID) {
     layers.push(new ScatterplotLayer<DarkEvent>({
       id: 'dark-zones',
-      data: darkEvents.filter(e => e.is_ongoing),
+      data: darkEvents,
       getPosition: d => [d.last_lon, d.last_lat],
       getRadius: 15_000,
       getFillColor: COLOR_DARK_ZONE,
