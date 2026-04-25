@@ -70,6 +70,7 @@ export function initMap(container: HTMLElement): {
   getZoom: () => number
   onViewportChange: (cb: (bbox: ViewportBbox) => void) => void
   onZoomEnd: (cb: () => void) => void
+  remove: () => void
 } {
   const map = new maplibregl.Map({
     container,
@@ -85,8 +86,6 @@ export function initMap(container: HTMLElement): {
     pixelRatio: Math.min(window.devicePixelRatio, 1.5),
   })
 
-  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
-  map.addControl(new maplibregl.NavigationControl(), 'top-right')
   map.addControl(new maplibregl.ScaleControl({ unit: 'nautical' }), 'bottom-left')
 
   map.on('load', () => {
@@ -126,6 +125,7 @@ export function initMap(container: HTMLElement): {
     getZoom:          () => map.getZoom(),
     onViewportChange: (cb) => { vpCallback = cb },
     onZoomEnd:        (cb) => { map.on('zoomend', cb) },
+    remove:           () => map.remove(),
   }
 }
 
