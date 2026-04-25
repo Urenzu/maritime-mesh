@@ -10,36 +10,24 @@ pub fn aisstream_to_frame(msg: AisStreamMsg, frame_id: u64) -> Result<Option<Gho
         .map(|d| d.as_nanos() as i64)
         .unwrap_or(0);
 
-    let meta = &msg.meta;
-
-    let (lat, lon, sog, cog, heading, rot) =
-        if let Some(r) = &msg.message.position_report {
-            let heading = if r.true_heading == 511 { f32::NAN } else { r.true_heading as f32 };
-            let rot = if r.rate_of_turn == -128 { f32::NAN } else { r.rate_of_turn as f32 };
-            (r.lat, r.lon, r.sog, r.cog, heading, rot)
-        } else if let Some(b) = &msg.message.class_b {
-            let heading = if b.true_heading == 511 { f32::NAN } else { b.true_heading as f32 };
-            (b.lat, b.lon, b.sog, b.cog, heading, f32::NAN)
-        } else {
-            return Ok(None);
-        };
-
-    // Ignore obviously invalid positions.
-    if lat == 0.0 && lon == 0.0 {
-        return Ok(None);
-    }
+    let heading = msg.true_heading
+        .filter(|&h| h != 511)
+        .map(|h| h as f32);
+    let rot = msg.rate_of_turn
+        .filter(|&r| r != -128)
+        .map(|r| r as f32);
 
     Ok(Some(GhostFrame {
         frame_id,
-        mmsi: meta.mmsi,
-        vessel_name: meta.ship_name.clone().filter(|n| !n.trim().is_empty()),
+        mmsi: msg.mmsi,
+        vessel_name: msg.ship_name.clone(),
         vessel_type: 0,
-        lat,
-        lon,
+        lat: msg.lat,
+        lon: msg.lon,
         altitude: 0.0,
         position_acc: false,
-        sog,
-        cog,
+        sog: msg.sog,
+        cog: msg.cog,
         heading,
         rot,
         timestamp_utc_ns: now_ns,
@@ -50,8 +38,7 @@ pub fn aisstream_to_frame(msg: AisStreamMsg, frame_id: u64) -> Result<Option<Gho
     }))
 }
 
-#[allow(dead_code)]
-/// Legacy: parse raw NMEA AIVDM sentences (used by sim and offline replay).
+/// Parse raw NMEA AIVDM sentences (used by sim and offline replay).
 pub fn sentence_to_frame(sentence: &str, frame_id: u64) -> Result<Option<GhostFrame>> {
     use crate::ais;
 

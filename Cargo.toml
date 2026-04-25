@@ -2,7 +2,6 @@
 members = [
     "crates/schema",
     "crates/ghost-log",
-    "crates/mesh",
     "crates/ingest",
     "crates/api",
     "crates/dark-zone",
@@ -15,41 +14,20 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-# async
-tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7", features = ["codec"] }
-
-# web
-axum = { version = "0.7", features = ["ws"] }
-tower-http = { version = "0.5", features = ["cors", "trace"] }
-
-# serialization
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-flatbuffers = "24"
-
-# storage
-fjall = "2"
-
-# observability
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-
-# error handling
-anyhow = "1"
-thiserror = "2"
-
-# utils
-chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1", features = ["v4", "serde"] }
-bytes = "1"
+tokio        = { version = "1", features = ["full"] }
+axum         = { version = "0.7", features = ["ws"] }
+tower-http   = { version = "0.5", features = ["cors", "trace"] }
+serde        = { version = "1", features = ["derive"] }
+serde_json   = "1"
+fjall        = "2"
+tracing      = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow       = "1"
+chrono       = { version = "0.4", features = ["serde"] }
 futures-util = "0.3"
-dotenvy = "0.15"
+dotenvy      = "0.15"
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 
-zenoh = { version = "0.11", default-features = false, features = ["transport_tcp", "transport_udp"] }
-
-# internal crates
 schema    = { path = "crates/schema" }
 ghost-log = { path = "crates/ghost-log" }
 dark-zone = { path = "crates/dark-zone" }
-mesh      = { path = "crates/mesh" }

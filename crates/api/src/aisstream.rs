@@ -18,18 +18,16 @@ struct Subscription {
     filter_message_types: Vec<String>,
 }
 
-/// Loose AISStream message — just the fields we need, everything optional.
-/// Any null or missing field gets a sensible default rather than dropping the frame.
 #[derive(Debug)]
 pub struct AisStreamMsg {
-    pub mmsi:        u32,
-    pub ship_name:   Option<String>,
-    pub lat:         f64,
-    pub lon:         f64,
-    pub sog:         f32,
-    pub cog:         f32,
-    pub true_heading: Option<u16>,   // 511 = not available
-    pub rate_of_turn: Option<i16>,   // -128 = not available
+    pub mmsi:         u32,
+    pub ship_name:    Option<String>,
+    pub lat:          f64,
+    pub lon:          f64,
+    pub sog:          f32,
+    pub cog:          f32,
+    pub true_heading: Option<u16>,
+    pub rate_of_turn: Option<i16>,
 }
 
 fn parse_msg(v: &Value) -> Option<AisStreamMsg> {
@@ -38,7 +36,6 @@ fn parse_msg(v: &Value) -> Option<AisStreamMsg> {
 
     let mmsi: u32 = meta["MMSI"].as_u64()?.try_into().ok()?;
 
-    // Pull position from whichever sub-message is present.
     let pos = if !msg["PositionReport"].is_null() {
         &msg["PositionReport"]
     } else if !msg["StandardClassBPositionReport"].is_null() {
@@ -85,7 +82,7 @@ pub async fn connect(api_key: &str) -> Result<mpsc::Receiver<AisStreamMsg>> {
     let (tx, rx) = mpsc::channel::<AisStreamMsg>(8192);
 
     tokio::spawn(async move {
-        let mut total = 0u64;
+        let mut total    = 0u64;
         let mut accepted = 0u64;
         while let Some(msg) = stream.next().await {
             match msg {

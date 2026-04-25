@@ -1,5 +1,6 @@
 services:
 
+  # ── Sim (optional profile) ────────────────────────────────────────────────────
   sim:
     build:
       context: .
@@ -8,8 +9,11 @@ services:
       SIM_ADDR: "0.0.0.0:10110"
     ports:
       - "10110:10110"
-    profiles: ["sim"]   # only starts with: docker compose --profile sim up
+    profiles: ["sim"]
 
+  # ── Ingest (live AISStream) ───────────────────────────────────────────────────
+  # Acts as the Zenoh peer that listens on a fixed port so the api can connect
+  # without a separate zenohd router (no UDP multicast needed on Docker bridge).
   ingest:
     build:
       context: .
@@ -17,14 +21,30 @@ services:
     env_file: .env
     environment:
       GHOST_LOG_PATH: /data/ghost-log
-      # When using sim instead of real AIS feed:
-      # AISSTREAM_MODE: sim
-      # SIM_HOST: sim
+      ZENOH_LISTEN: "0.0.0.0:7447"
     volumes:
       - ghost-log-data:/data/ghost-log
-    depends_on: []
     restart: unless-stopped
 
+  # ── Ingest (sim mode) ─────────────────────────────────────────────────────────
+  ingest-sim:
+    build:
+      context: .
+      dockerfile: docker/ingest.Dockerfile
+    environment:
+      GHOST_LOG_PATH: /data/ghost-log
+      ZENOH_LISTEN: "0.0.0.0:7447"
+      AISSTREAM_MODE: "sim"
+      SIM_HOST: "sim"
+      SIM_PORT: "10110"
+    volumes:
+      - ghost-log-data:/data/ghost-log
+    depends_on:
+      - sim
+    profiles: ["sim"]
+    restart: unless-stopped
+
+  # ── API ───────────────────────────────────────────────────────────────────────
   api:
     build:
       context: .
@@ -34,12 +54,35 @@ services:
       GHOST_LOG_PATH: /data/ghost-log
       BIND_ADDR: "0.0.0.0:8080"
       DARK_ZONE_THRESHOLD_MINS: "15"
+      ZENOH_PEER: "ingest:7447"
     volumes:
       - ghost-log-data:/data/ghost-log
     ports:
       - "8080:8080"
+    depends_on:
+      - ingest
     restart: unless-stopped
 
+  api-sim:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    env_file: .env
+    environment:
+      GHOST_LOG_PATH: /data/ghost-log
+      BIND_ADDR: "0.0.0.0:8080"
+      DARK_ZONE_THRESHOLD_MINS: "15"
+      ZENOH_PEER: "ingest-sim:7447"
+    volumes:
+      - ghost-log-data:/data/ghost-log
+    ports:
+      - "8080:8080"
+    depends_on:
+      - ingest-sim
+    profiles: ["sim"]
+    restart: unless-stopped
+
+  # ── Frontend ──────────────────────────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend

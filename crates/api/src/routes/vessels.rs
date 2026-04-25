@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use ghost_log::Store;
 use serde::Deserialize;
 
 use crate::state::AppState;
@@ -35,22 +36,19 @@ pub async fn track(
     Query(params): Query<TrackParams>,
     State(state): State<Arc<AppState>>,
 ) -> Json<serde_json::Value> {
-    let now_ns   = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos() as i64;
-    let from_ns  = params.from_ns.unwrap_or(now_ns - 24 * 3_600 * 1_000_000_000);
-    let to_ns    = params.to_ns.unwrap_or(now_ns);
+    let now_ns  = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let from_ns = params.from_ns.unwrap_or(now_ns - 24 * 3_600 * 1_000_000_000);
+    let to_ns   = params.to_ns.unwrap_or(now_ns);
 
-    match state.qdb.track(mmsi, from_ns, to_ns).await {
+    match state.ghost_log.track(mmsi, from_ns, to_ns) {
         Ok(frames) => Json(serde_json::json!({
             "mmsi":   mmsi,
             "count":  frames.len(),
             "frames": frames,
         })),
         Err(e) => Json(serde_json::json!({
-            "mmsi":  mmsi,
-            "error": e.to_string(),
+            "mmsi":   mmsi,
+            "error":  e.to_string(),
             "frames": [],
         })),
     }

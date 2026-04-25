@@ -8,9 +8,25 @@ import type { GhostFrame, VesselState } from './types'
 import type { WorkerInbound, VesselSnapshot } from './worker-types'
 import type { ViewportBbox } from './api'
 
-const COLOR_REAL:      readonly [number, number, number, number] = [0,   210, 255, 220]
-const COLOR_SYNTHETIC: readonly [number, number, number, number] = [255, 180, 0,   220]
-const COLOR_DARK:      readonly [number, number, number, number] = [255, 60,  60,  255]
+// Age-based colors: how fresh the vessel's last AIS ping is.
+const COLOR_LIVE:    readonly [number, number, number, number] = [0,   255, 157, 230]  // <5 min  — cyan-green
+const COLOR_RECENT:  readonly [number, number, number, number] = [245, 166, 35,  220]  // 5–30 min — amber
+const COLOR_STALE:   readonly [number, number, number, number] = [255, 107, 53,  200]  // 30min–2h — orange
+const COLOR_OLD:     readonly [number, number, number, number] = [180, 60,  60,  100]  // >2h      — dim red
+const COLOR_DARK:    readonly [number, number, number, number] = [255, 60,  60,  255]  // dark zone
+
+const MS_5MIN  =   5 * 60 * 1_000
+const MS_30MIN =  30 * 60 * 1_000
+const MS_2H    = 120 * 60 * 1_000
+
+function vesselColor(v: VesselState): readonly [number, number, number, number] {
+  if (v.is_dark) return COLOR_DARK
+  const ageMs = Date.now() - v.last_seen_ns / 1_000_000
+  if (ageMs < MS_5MIN)  return COLOR_LIVE
+  if (ageMs < MS_30MIN) return COLOR_RECENT
+  if (ageMs < MS_2H)    return COLOR_STALE
+  return COLOR_OLD
+}
 
 const vessels = new Map<number, VesselState>()
 let ws:      WebSocket | null = null
@@ -70,9 +86,7 @@ function postSnapshot() {
     positions[i * 2]     = v.lon
     positions[i * 2 + 1] = v.lat
 
-    const c = v.is_dark          ? COLOR_DARK
-            : v.confidence < 1.0 ? COLOR_SYNTHETIC
-            :                      COLOR_REAL
+    const c = vesselColor(v)
     colors[i * 4]     = c[0]
     colors[i * 4 + 1] = c[1]
     colors[i * 4 + 2] = c[2]

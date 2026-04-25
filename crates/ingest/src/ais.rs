@@ -8,12 +8,12 @@ pub struct AisPositionReport {
     pub msg_type: u8,
     #[allow(dead_code)]
     pub nav_status: u8,
-    pub rot: f32,       // rate of turn, deg/min
-    pub sog: f32,       // speed over ground, knots (× 0.1 raw)
-    pub lon: f64,       // degrees
-    pub lat: f64,       // degrees
-    pub cog: f32,       // course over ground, degrees (× 0.1 raw)
-    pub heading: f32,   // true heading, degrees (511 = not available)
+    pub rot: Option<f32>,       // rate of turn, deg/min; None = not available
+    pub sog: f32,               // speed over ground, knots (× 0.1 raw)
+    pub lon: f64,               // degrees
+    pub lat: f64,               // degrees
+    pub cog: f32,               // course over ground, degrees (× 0.1 raw)
+    pub heading: Option<f32>,   // true heading, degrees; None = not available (511)
     pub position_acc: bool,
 }
 
@@ -45,12 +45,12 @@ pub fn decode_position(payload: &str, fill_bits: u8) -> Option<AisPositionReport
             mmsi,
             msg_type,
             nav_status: 0,
-            rot: 0.0,
+            rot: None,
             sog,
             lon,
             lat,
             cog,
-            heading: if heading == 511.0 { f32::NAN } else { heading },
+            heading: if heading == 511.0 { None } else { Some(heading) },
             position_acc,
         });
     }
@@ -58,7 +58,6 @@ pub fn decode_position(payload: &str, fill_bits: u8) -> Option<AisPositionReport
     // Class A (1/2/3)
     let nav_status = read_u8(&bits, 38, 4);
     let rot_raw = read_i8(&bits, 42, 8);
-    let rot = if rot_raw == -128 { f32::NAN } else { rot_raw as f32 };
     let sog = read_u16(&bits, 50, 10) as f32 * 0.1;
     let position_acc = bits[60];
     let lon = read_i32(&bits, 61, 28) as f64 / 10_000.0 / 60.0;
@@ -70,12 +69,12 @@ pub fn decode_position(payload: &str, fill_bits: u8) -> Option<AisPositionReport
         mmsi,
         msg_type,
         nav_status,
-        rot,
+        rot: if rot_raw == -128 { None } else { Some(rot_raw as f32) },
         sog,
         lon,
         lat,
         cog,
-        heading: if heading == 511.0 { f32::NAN } else { heading },
+        heading: if heading == 511.0 { None } else { Some(heading) },
         position_acc,
     })
 }

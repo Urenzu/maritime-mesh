@@ -12,8 +12,8 @@ maplibregl.addProtocol('pmtiles', pmtilesProtocol.tile.bind(pmtilesProtocol))
 const COLOR_DARK:      [number, number, number]    = [255, 60,  60 ]
 const COLOR_DARK_ZONE: [number, number, number, number] = [255, 60, 60, 45]
 
-export const ZOOM_HEATMAP = 5
-export const ZOOM_GRID    = 8
+export const ZOOM_HEATMAP = 3   // below: density dots
+export const ZOOM_GRID    = 7   // above: individual vessels, clickable
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -75,8 +75,8 @@ export function initMap(container: HTMLElement): {
   const map = new maplibregl.Map({
     container,
     style: PMTILES_URL ? maritimeVectorStyle(PMTILES_URL) : MARITIME_RASTER_STYLE,
-    center: [2.5, 51.5],
-    zoom: 3,
+    center: [10, 30],
+    zoom: 2,
     antialias: false,
     fadeDuration: 0,
     attributionControl: false,
@@ -89,18 +89,57 @@ export function initMap(container: HTMLElement): {
   map.addControl(new maplibregl.ScaleControl({ unit: 'nautical' }), 'bottom-left')
 
   map.on('load', () => {
+    // GFW vessel presence — all AIS-transmitting vessels, last 30 days.
+    // Proxied through our backend to keep the API key off the client.
+    map.addSource('gfw-presence', {
+      type: 'raster',
+      tiles: ['/v1/tiles/presence/{z}/{x}/{y}'],
+      tileSize: 256,
+      minzoom: 0,
+      maxzoom: 12,
+      attribution: '© <a href="https://globalfishingwatch.org">Global Fishing Watch</a>',
+    })
+    map.addLayer({
+      id: 'gfw-presence-layer',
+      type: 'raster',
+      source: 'gfw-presence',
+      paint: {
+        'raster-opacity': 0.55,
+        'raster-fade-duration': 0,
+      },
+    })
+
+    // GFW fishing effort — fishing vessels specifically.
+    map.addSource('gfw-fishing', {
+      type: 'raster',
+      tiles: ['/v1/tiles/fishing/{z}/{x}/{y}'],
+      tileSize: 256,
+      minzoom: 0,
+      maxzoom: 12,
+      attribution: '© <a href="https://globalfishingwatch.org">Global Fishing Watch</a>',
+    })
+    map.addLayer({
+      id: 'gfw-fishing-layer',
+      type: 'raster',
+      source: 'gfw-fishing',
+      paint: {
+        'raster-opacity': 0.0,   // off by default, toggled by UI
+        'raster-fade-duration': 0,
+      },
+    })
+
     map.addSource('openseamap', {
       type: 'raster',
       tiles: ['https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png'],
       tileSize: 256,
       attribution: '© <a href="https://www.openseamap.org">OpenSeaMap</a>',
-      minzoom: 8,
+      minzoom: 6,
     })
     map.addLayer({
       id: 'openseamap-layer',
       type: 'raster',
       source: 'openseamap',
-      minzoom: 8,
+      minzoom: 6,
       paint: { 'raster-opacity': 0.8, 'raster-fade-duration': 0 },
     })
   })
@@ -166,11 +205,11 @@ export function buildLayers(
       getPosition: { value: positions, size: 2 },
       getFillColor: { value: colors,    size: 4, normalized: false },
     },
-    getRadius:       zoom < ZOOM_HEATMAP ? 60_000 : zoom < ZOOM_GRID ? 8_000 : 400,
+    getRadius:       zoom < ZOOM_HEATMAP ? 120_000 : zoom < ZOOM_GRID ? 8_000 : 400,
     radiusUnits:     'meters',
-    radiusMinPixels: zoom < ZOOM_HEATMAP ? 1 : 2,
-    radiusMaxPixels: zoom < ZOOM_HEATMAP ? 3 : zoom < ZOOM_GRID ? 6 : 12,
-    opacity:         zoom < ZOOM_HEATMAP ? 0.5 : zoom < ZOOM_GRID ? 0.8 : 1.0,
+    radiusMinPixels: 2,
+    radiusMaxPixels: zoom < ZOOM_HEATMAP ? 12 : zoom < ZOOM_GRID ? 9 : 14,
+    opacity:         zoom < ZOOM_HEATMAP ? 0.75 : zoom < ZOOM_GRID ? 0.85 : 1.0,
     stroked:         zoom >= ZOOM_GRID,
     getLineColor:    [255, 255, 255, 50],
     lineWidthMinPixels: 1,

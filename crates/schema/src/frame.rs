@@ -15,10 +15,10 @@ pub struct GhostFrame {
     pub position_acc: bool,
 
     // Kinematics
-    pub sog: f32,       // speed over ground, knots
-    pub cog: f32,       // course over ground, degrees true
-    pub heading: f32,   // true heading, degrees
-    pub rot: f32,       // rate of turn, deg/min
+    pub sog: f32,              // speed over ground, knots
+    pub cog: f32,              // course over ground, degrees true
+    pub heading: Option<f32>,  // true heading, degrees; None = not available (AIS code 511)
+    pub rot: Option<f32>,      // rate of turn, deg/min; None = not available (AIS code -128)
 
     // Temporal (Unix nanoseconds)
     pub timestamp_utc_ns: i64,
@@ -80,7 +80,7 @@ pub struct VesselState {
     pub lon: f64,
     pub sog: f32,
     pub cog: f32,
-    pub heading: f32,
+    pub heading: Option<f32>,
     pub last_seen_ns: i64,
     pub is_dark: bool,
     pub confidence: f32,

@@ -10,7 +10,6 @@ path = "src/main.rs"
 [dependencies]
 schema     = { workspace = true }
 dark-zone  = { workspace = true }
-mesh       = { workspace = true }
 ghost-log  = { workspace = true }
 tokio      = { workspace = true }
 axum       = { workspace = true }
@@ -22,6 +21,8 @@ tracing-subscriber = { workspace = true }
 anyhow     = { workspace = true }
 chrono     = { workspace = true }
 dotenvy    = { workspace = true }
+futures-util      = { workspace = true }
+tokio-tungstenite = { workspace = true }
 
 reqwest     = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 urlencoding = "2"

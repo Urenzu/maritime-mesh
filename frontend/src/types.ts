@@ -13,8 +13,8 @@ export interface GhostFrame {
   lon: number
   sog: number       // knots
   cog: number       // degrees true
-  heading: number
-  rot: number
+  heading: number | null  // null = AIS code 511 (not available)
+  rot: number | null      // null = AIS code -128 (not available)
   timestamp_utc_ns: number
   ingested_at_ns: number
   frame_type: { type: FrameType }
@@ -30,7 +30,7 @@ export interface VesselState {
   lon: number
   sog: number
   cog: number
-  heading: number
+  heading: number | null
   last_seen_ns: number
   is_dark: boolean
   confidence: number

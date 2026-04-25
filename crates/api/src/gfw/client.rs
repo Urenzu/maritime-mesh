@@ -6,8 +6,8 @@ const GFW_BASE: &str = "https://gateway.api.globalfishingwatch.org";
 
 #[derive(Clone)]
 pub struct GfwClient {
-    pub(super) http: Client,
-    pub(super) api_key: String,
+    pub http: Client,
+    pub api_key: String,
 }
 
 impl GfwClient {
