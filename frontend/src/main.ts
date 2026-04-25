@@ -1,30 +1,35 @@
 import 'maplibre-gl/dist/maplibre-gl.css'
 import './style.css'
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {/* non-fatal */})
+}
+
 import { initMap, buildLayers, ZOOM_HEATMAP, ZOOM_GRID } from './map'
-import { StreamClient, fetchVessels, fetchDarkZones, fetchVesselDark } from './api'
+import { fetchVessels, fetchDarkZones, fetchVesselDark } from './api'
 import { initHud, initPanel, showVesselReport, updateHud } from './ui'
-import type { VesselState, GhostFrame, DarkEvent } from './types'
-import { FrameType } from './types'
+import type { DarkEvent } from './types'
+import type { VesselSnapshot } from './worker-types'
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 const container = document.getElementById('app')!
-const { overlay, getZoom, onViewportChange, onZoomEnd } = initMap(container, onVesselClick)
+const { overlay, getZoom, onViewportChange, onZoomEnd } = initMap(container)
 
 initHud()
 initPanel()
 
-// ── State ─────────────────────────────────────────────────────────────────────
+// ── Vessel state (typed arrays owned by main thread, filled by worker) ────────
 
-const vessels  = new Map<number, VesselState>()
-let vesselArray: VesselState[] = []
-let darkEvents: DarkEvent[]    = []
+let positions   = new Float32Array(0)
+let colors      = new Uint8Array(0)
+let mmsis       = new Int32Array(0)
+let vesselCount = 0
+let darkCount   = 0
+let darkEvents: DarkEvent[] = []
 
-// Separate flags so we only pay for what changed.
-let dataDirty = false   // vessel map or dark events changed → rebuild layers
-let hudDirty  = false   // vessel count changed → update HUD
-
-// LOD tier: 0=heatmap, 1=grid, 2=scatter. -1 = unset (forces first render).
+let dataDirty = false
+let hudDirty  = false
 let currentLod = -1
 
 function getLod(zoom: number): number {
@@ -34,70 +39,47 @@ function getLod(zoom: number): number {
 }
 
 // ── rAF render loop ───────────────────────────────────────────────────────────
-// MapboxOverlay syncs its viewport to MapLibre automatically — we only call
-// setProps when data or layer configuration actually changes.
 
 function renderLoop() {
   if (dataDirty) {
-    dataDirty    = false
-    hudDirty     = false
-    vesselArray  = Array.from(vessels.values())
-    currentLod   = getLod(getZoom())
-    overlay.setProps({ layers: buildLayers(vesselArray, darkEvents, getZoom()) })
-    updateHud(vessels.size, vesselArray.filter(v => v.is_dark).length)
+    dataDirty  = false
+    hudDirty   = false
+    currentLod = getLod(getZoom())
+    overlay.setProps({ layers: buildLayers(vesselCount, positions, colors, mmsis, darkEvents, getZoom(), onVesselClick) })
+    updateHud(vesselCount, darkCount)
   } else if (hudDirty) {
     hudDirty = false
-    updateHud(vessels.size, vesselArray.filter(v => v.is_dark).length)
+    updateHud(vesselCount, darkCount)
   }
   requestAnimationFrame(renderLoop)
 }
 requestAnimationFrame(renderLoop)
 
-// ── WebSocket stream ──────────────────────────────────────────────────────────
+// ── Web Worker — vessel data pipeline ────────────────────────────────────────
+// Worker owns WebSocket + vessel Map. Posts typed array snapshots every 50ms.
+// Main thread never touches raw frames or JSON parsing.
 
-const stream = new StreamClient((frame: GhostFrame) => {
-  vessels.set(frame.mmsi, {
-    mmsi:         frame.mmsi,
-    vessel_name:  frame.vessel_name,
-    vessel_type:  frame.vessel_type,
-    lat:          frame.lat,
-    lon:          frame.lon,
-    sog:          frame.sog,
-    cog:          frame.cog,
-    heading:      frame.heading,
-    last_seen_ns: frame.timestamp_utc_ns,
-    is_dark:      frame.frame_type.type === FrameType.GapMarker,
-    confidence:   frame.confidence,
-  })
-  dataDirty = true
-  hudDirty  = true
-})
-stream.connect()
+const worker = new Worker(new URL('./vessel-worker.ts', import.meta.url), { type: 'module' })
 
-// ── Viewport → WebSocket filter (debounced 300ms) ─────────────────────────────
+worker.onmessage = ({ data }: MessageEvent<VesselSnapshot>) => {
+  positions   = data.positions
+  colors      = data.colors
+  mmsis       = data.mmsis
+  vesselCount = data.count
+  darkCount   = data.darkCount
+  dataDirty   = true
+  hudDirty    = true
+}
 
-let vpTimer: ReturnType<typeof setTimeout>
-onViewportChange(bbox => {
-  clearTimeout(vpTimer)
-  vpTimer = setTimeout(() => stream.sendViewport(bbox), 300)
+worker.postMessage({
+  type:  'connect',
+  wsUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/v1/stream`,
 })
 
-// Rebuild layers only when zoom crosses an LOD boundary (heatmap/grid/scatter).
-// During the gesture itself MapboxOverlay handles the viewport — no rebuild needed.
-onZoomEnd(() => {
-  const lod = getLod(getZoom())
-  if (lod !== currentLod) {
-    currentLod = lod
-    dataDirty  = true
-  }
-})
-
-// ── REST: initial load + dark zone poll ───────────────────────────────────────
+// ── REST: initial vessel seed + dark zone poll ────────────────────────────────
 
 fetchVessels().then(list => {
-  for (const v of list) vessels.set(v.mmsi, v)
-  dataDirty = true
-  hudDirty  = true
+  worker.postMessage({ type: 'seed', vessels: list })
 }).catch(console.error)
 
 async function refreshDarkZones() {
@@ -111,11 +93,27 @@ async function refreshDarkZones() {
 refreshDarkZones()
 setInterval(refreshDarkZones, 30_000)
 
-// ── Vessel click → detail panel ───────────────────────────────────────────────
+// ── Viewport → Worker → WebSocket (debounced 300ms) ───────────────────────────
 
-async function onVesselClick(vessel: VesselState) {
+let vpTimer: ReturnType<typeof setTimeout>
+onViewportChange(bbox => {
+  clearTimeout(vpTimer)
+  vpTimer = setTimeout(() => worker.postMessage({ type: 'set-viewport', bbox }), 300)
+})
+
+onZoomEnd(() => {
+  const lod = getLod(getZoom())
+  if (lod !== currentLod) {
+    currentLod = lod
+    dataDirty  = true
+  }
+})
+
+// ── Vessel click ──────────────────────────────────────────────────────────────
+
+async function onVesselClick(mmsi: number) {
   try {
-    const report = await fetchVesselDark(vessel.mmsi) as Record<string, unknown>
+    const report = await fetchVesselDark(mmsi) as Record<string, unknown>
     showVesselReport(report)
   } catch (e) {
     console.error('vessel report failed', e)

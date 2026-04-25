@@ -5,8 +5,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'deck':     ['@deck.gl/core', '@deck.gl/layers', '@deck.gl/aggregation-layers', '@deck.gl/mapbox'],
+          'deck':     ['@deck.gl/core', '@deck.gl/layers', '@deck.gl/mapbox'],
           'maplibre': ['maplibre-gl'],
+          'pmtiles':  ['pmtiles'],
         },
       },
     },
