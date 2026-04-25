@@ -9,6 +9,12 @@ export async function fetchVessels(): Promise<VesselState[]> {
   return data.vessels ?? data
 }
 
+export async function fetchVessel(mmsi: number): Promise<VesselState | null> {
+  const res = await fetch(`${BASE}/vessels/${mmsi}`)
+  if (!res.ok) return null
+  return res.json()
+}
+
 export async function fetchDarkZones(): Promise<{ dark_events: DarkEvent[] }> {
   const res = await fetch(`${BASE}/dark-zones`)
   if (!res.ok) throw new Error(`dark-zones: ${res.status}`)
@@ -17,8 +23,15 @@ export async function fetchDarkZones(): Promise<{ dark_events: DarkEvent[] }> {
 
 export async function fetchVesselDark(mmsi: number): Promise<unknown> {
   const res = await fetch(`${BASE}/vessels/${mmsi}/dark`)
-  if (!res.ok) throw new Error(`vessel dark: ${res.status}`)
+  if (!res.ok) return null
   return res.json()
+}
+
+export async function fetchTrack(mmsi: number): Promise<[number, number][]> {
+  const res = await fetch(`${BASE}/vessels/${mmsi}/track`)
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.frames as GhostFrame[] ?? []).map(f => [f.lon, f.lat] as [number, number])
 }
 
 export interface ViewportBbox {

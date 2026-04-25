@@ -1,7 +1,7 @@
 import maplibregl from 'maplibre-gl'
 import { Protocol } from 'pmtiles'
 import { MapboxOverlay } from '@deck.gl/mapbox'
-import { ScatterplotLayer } from '@deck.gl/layers'
+import { ScatterplotLayer, PathLayer } from '@deck.gl/layers'
 import type { DarkEvent } from './types'
 import type { ViewportBbox } from './api'
 
@@ -180,8 +180,22 @@ export function buildLayers(
   darkEvents:     DarkEvent[],
   zoom:           number,
   onVesselClick:  (mmsi: number) => void,
+  track:          [number, number][],
 ) {
   const layers = []
+
+  if (track.length > 1) {
+    layers.push(new PathLayer({
+      id: 'vessel-track',
+      data: [{ path: track }],
+      getPath: (d: { path: [number, number][] }) => d.path,
+      getColor: [0, 255, 157, 150],
+      getWidth: 2,
+      widthUnits: 'pixels',
+      widthMinPixels: 1,
+      pickable: false,
+    }))
+  }
 
   if (zoom >= ZOOM_GRID) {
     layers.push(new ScatterplotLayer<DarkEvent>({

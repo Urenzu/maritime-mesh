@@ -112,6 +112,7 @@ self.onmessage = ({ data }: MessageEvent<WorkerInbound>) => {
       break
     case 'seed':
       for (const v of data.vessels) vessels.set(v.mmsi, v)
+      dirty = true
       break
     case 'set-viewport':
       sendViewport(data.bbox)

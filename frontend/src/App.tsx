@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { initMap, buildLayers, ZOOM_HEATMAP, ZOOM_GRID } from './map'
-import { fetchVessels, fetchDarkZones, fetchVesselDark } from './api'
-import type { DarkEvent } from './types'
+import { fetchVessels, fetchVessel, fetchDarkZones, fetchVesselDark, fetchTrack } from './api'
+import type { DarkEvent, VesselState } from './types'
 import type { VesselSnapshot } from './worker-types'
 import Hud from './components/Hud'
 import VesselPanel from './components/VesselPanel'
@@ -20,6 +20,7 @@ export default function App() {
   const [darkCount,   setDarkCount]   = useState(0)
   const [lastUpdate,  setLastUpdate]  = useState('—')
   const [panelOpen,   setPanelOpen]   = useState(false)
+  const [panelVessel, setPanelVessel] = useState<VesselState | null>(null)
   const [panelReport, setPanelReport] = useState<Record<string, unknown> | null>(null)
 
   // ── Mutable refs for the rAF loop (bypass React re-renders) ────────────────
@@ -31,16 +32,21 @@ export default function App() {
   const dataDirty   = useRef(false)
   const currentLod  = useRef(-1)
   const darkEvents  = useRef<DarkEvent[]>([])
+  const trackRef    = useRef<[number, number][]>([])
 
   const onVesselClick = useCallback(async (mmsi: number) => {
-    try {
-      const report = await fetchVesselDark(mmsi) as Record<string, unknown>
-      setPanelReport(report)
-      setPanelOpen(true)
-    } catch (e) { console.error('vessel report failed', e) }
+    const [vesselRes, darkRes, trackRes] = await Promise.allSettled([
+      fetchVessel(mmsi),
+      fetchVesselDark(mmsi) as Promise<Record<string, unknown>>,
+      fetchTrack(mmsi),
+    ])
+    setPanelVessel(vesselRes.status === 'fulfilled' ? vesselRes.value : null)
+    setPanelReport(darkRes.status  === 'fulfilled' ? darkRes.value  : null)
+    trackRef.current  = trackRes.status === 'fulfilled' ? trackRes.value : []
+    dataDirty.current = true
+    setPanelOpen(true)
   }, [])
 
-  // Stable ref so the rAF loop always calls the latest callback
   const onVesselClickRef = useRef(onVesselClick)
   onVesselClickRef.current = onVesselClick
 
@@ -57,11 +63,11 @@ export default function App() {
     )
 
     worker.onmessage = ({ data }: MessageEvent<VesselSnapshot>) => {
-      posRef.current   = data.positions
-      colRef.current   = data.colors
-      msiRef.current   = data.mmsis
-      vcRef.current    = data.count
-      dcRef.current    = data.darkCount
+      posRef.current    = data.positions
+      colRef.current    = data.colors
+      msiRef.current    = data.mmsis
+      vcRef.current     = data.count
+      dcRef.current     = data.darkCount
       dataDirty.current = true
     }
 
@@ -116,6 +122,7 @@ export default function App() {
             darkEvents.current,
             zoom,
             onVesselClickRef.current,
+            trackRef.current,
           ),
         })
         setVesselCount(vcRef.current)
@@ -133,7 +140,15 @@ export default function App() {
       worker.terminate()
       remove()
     }
-  }, []) // mount once
+  }, [])
+
+  function closePanel() {
+    setPanelOpen(false)
+    setPanelVessel(null)
+    setPanelReport(null)
+    trackRef.current  = []
+    dataDirty.current = true
+  }
 
   return (
     <>
@@ -141,8 +156,9 @@ export default function App() {
       <Hud vesselCount={vesselCount} darkCount={darkCount} lastUpdate={lastUpdate} />
       <VesselPanel
         open={panelOpen}
+        vessel={panelVessel}
         report={panelReport}
-        onClose={() => setPanelOpen(false)}
+        onClose={closePanel}
       />
     </>
   )
